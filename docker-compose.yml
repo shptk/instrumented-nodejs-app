@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  nodejs-app:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - otel-collector
+    environment:
+      - SERVICE_NAME=shptk-nodejs-app
+      - SERVICE_VERSION=1.0.0
+      - DEPLOYMENT_ENVIRONMENT=development
+      - PORT=3000
+      - LOG_LEVEL=info
+      - SIGNOZ_ACCESS_TOKEN=${SIGNOZ_ACCESS_TOKEN}
+      # Updated endpoints to point to collector
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://otel-collector:4318/v1/metrics
+    volumes:
+      - .:/app
+      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - otel-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics for collector itself
+      - "8889:8889"   # Prometheus exporter
+    volumes:
+      - ./collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      - SIGNOZ_ACCESS_TOKEN=${SIGNOZ_ACCESS_TOKEN}
+    restart: unless-stopped
+    networks:
+      - otel-network
+
+networks:
+  otel-network:
+    driver: bridge
